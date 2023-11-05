@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v1
@@ -47,7 +47,7 @@ jobs:
           path: '**/build/outputs/apk/**/*.apk'
 
       - name: Run local tests
-        run: ./gradlew testDemoDebug testProdDebug
+        run: ./gradlew testDemoDebug testProdDebug :lint:test
 
   test:
     runs-on: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v1
@@ -96,7 +96,7 @@ jobs:
           ./gradlew recordRoborazziDemoDebug
 
       - name: Push new screenshots if available
-        uses: stefanzweifel/git-auto-commit-action@v4
+        uses: stefanzweifel/git-auto-commit-action@v5
         if: steps.screenshotsrecord.outcome == 'success'
         with:
           file_pattern: '*/*.png'
@@ -125,6 +125,9 @@ jobs:
           name: lint-reports
           path: '**/build/reports/lint-results-*.html'
 
+      - name: Check badging
+        run: ./gradlew :app:checkProdReleaseBadging
+
   androidTest:
     needs: build
     runs-on: macOS-latest # enables hardware acceleration in the virtual machine
@@ -135,7 +138,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
@@ -168,45 +171,3 @@ jobs:
         with:
           name: test-reports-${{ matrix.api-level }}
           path: '**/build/reports/androidTests'
-
-  androidTest-GMD:
-    needs: build
-    runs-on: macOS-latest # enables hardware acceleration in the virtual machine
-    timeout-minutes: 90
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Copy CI gradle.properties
-        run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: 17
-
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-
-      - name: Accept Android licenses
-        run: yes | "$ANDROID_HOME"/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Build AndroidTest apps
-        run: ./gradlew packageDemoDebug packageDemoDebugAndroidTest
-
-      - name: Run instrumented tests with GMD
-        run: ./gradlew ciDemoDebugAndroidTest --no-parallel --max-workers=1
-          -Pandroid.testoptions.manageddevices.emulator.gpu="swiftshader_indirect" -Pandroid.experimental.testOptions.managedDevices.emulator.showKernelLogging=true
-
-      - name: Upload test reports
-        if: success() || failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-reports-GMD
-          path: '**/build/reports/androidTests'
-
-      - name: Print disk space usage
-        if: failure()
-        run: df -h
